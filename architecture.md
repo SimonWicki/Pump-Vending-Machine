@@ -1,0 +1,3 @@
+# Architecture
+
+Detailed contract interactions

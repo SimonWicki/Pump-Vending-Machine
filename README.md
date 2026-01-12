@@ -3,164 +3,193 @@
 
 ![Pump Vending Machine](pumpvending.png)
 
-Pump Vending Machine, abbreviated as PVM, is a minimal on-chain distribution primitive designed around a single idea: buy the token, receive tokens back over time. The system intentionally avoids complex gamification, staking contracts, claim windows, snapshots, or discretionary reward logic.
+Pump Vending Machine (PVM) is a deterministic token redistribution primitive designed to behave like infrastructure rather than a product. The system is intentionally simple at the surface and deliberately strict underneath. Buy the token, hold the token, and the system dispenses tokens back to holders on a fixed interval.
 
-PVM treats redistribution as infrastructure, not a feature.
+PVM was designed and launched by Simon Wicki as an experiment in mechanical distribution. There are no incentives layered on top of holding. There are no participation mechanics beyond ownership. There are no promises of yield, growth, or sustainability. The system only reacts to real inflows and real balances at execution time.
 
-This repository documents the full design, architecture, and reference implementation of Pump Vending Machine as launched and maintained by Simon Wicki.
+This repository documents the full design philosophy, economic reasoning, contract architecture, off-chain execution model, and reference implementations for Pump Vending Machine.
 
-## High-Level Concept
+This is not marketing documentation. This is system documentation.
 
-Pump Vending Machine is modeled after a real-world vending machine. Value enters the system continuously through trading activity. At fixed intervals, the system releases accumulated value back to holders proportionally.
+---
 
-There is no user interaction beyond holding the token.
-There is no manual claiming.
-There is no randomness.
-There is no governance-controlled payout switch.
+## Design Motivation
 
-Every ten minutes, the machine dispenses.
+Most token reward systems attempt to engineer behavior by introducing additional rules: staking, locking, delegation, voting, claim windows, emissions schedules, multipliers, boosts, penalties, and snapshot mechanics. Each added rule introduces new attack surfaces, new forms of gaming, and additional cognitive overhead for users.
 
-## Core Properties
+Pump Vending Machine intentionally rejects that direction.
 
-- Deterministic distribution schedule
-- Time-based execution
-- Proportional holder allocation
-- No snapshots
-- No staking or locking
-- No claim transactions
-- Fully automated execution logic
+The guiding principle is that holding should be the only action required. If holding is not enough, the system has already failed.
 
-The contract logic is designed so that holding the token is the only required action to participate.
+Simon Wicki designed PVM around a vending machine metaphor because vending machines are understood universally. You do not negotiate with a vending machine. You do not convince it to like you. You do not optimize your behavior around it. You insert value, and the machine dispenses according to a fixed rule set.
 
-## Why This Exists
+PVM applies the same logic to token redistribution.
 
-Most redistribution mechanisms in tokens rely on one of the following patterns:
+---
 
-- Snapshot-based rewards
-- Manual claim systems
-- Staking pools
-- Epoch-based eligibility lists
-- Off-chain scripts with opaque logic
+## Core Invariants
 
-These approaches introduce friction, surface area for manipulation, and user confusion.
+The system enforces the following invariants at all times:
 
-Pump Vending Machine intentionally removes all of that.
+- Distribution only occurs when tokens are present
+- Distribution only occurs at execution time
+- Distribution is proportional to balances at execution
+- Distribution does not depend on historical ownership
+- Distribution does not require user interaction
+- Distribution does not mint new tokens
 
-The system operates continuously and predictably. If you hold the token during a distribution window, you receive tokens. If you do not hold the token, you do not.
+If any of these invariants are violated, the system is considered broken.
 
-This design philosophy reflects Simon Wicki’s preference for systems that behave like infrastructure rather than applications.
+---
 
-## Distribution Model
+## System Overview
 
-### Time Interval
+At a high level, Pump Vending Machine consists of three layers:
 
-The contract defines a fixed distribution interval of 600 seconds.
+1. On-chain contracts responsible for custody and proportional allocation
+2. Off-chain executors responsible for triggering execution
+3. External systems that route tokens into the machine
 
-At the end of each interval, the contract calculates:
+Each layer is intentionally simple in isolation.
 
-- Total tokens available for redistribution
-- Current circulating supply
-- Holder balances at execution time
+---
 
-### Allocation Formula
+## Token Flow Lifecycle
 
-Each holder receives a portion of the distribution pool proportional to their balance relative to total eligible supply.
+1. Tokens are routed into the Pump Vending Machine contract
+2. Tokens accumulate in the internal pool
+3. A fixed interval elapses
+4. Execution is triggered
+5. Holder balances are read at execution
+6. Allocation amounts are calculated
+7. Tokens are pushed to holder wallets
+8. The system returns to idle state
 
-allocation = (holder_balance / total_supply) * distribution_pool
+There is no deviation from this flow.
 
-No rounding tricks are applied beyond standard integer math safety checks.
+---
 
-### Source of Distributed Tokens
+## Execution Timing
 
-Distributed tokens originate from:
+The default execution interval is 600 seconds.
 
-- Transaction fees routed to the contract
-- Predefined emission buffer
-- External inflows routed to the vending machine address
+This value is fixed at deployment and cannot be modified without redeploying the contract. This prevents governance drift and discretionary tuning.
 
-The system does not mint new tokens during distribution.
+Execution does not occur continuously. It occurs discretely. Tokens that enter the system between executions are pooled together.
 
-## System Architecture
+If execution is delayed for any reason, the pool grows. When execution resumes, the entire pool is distributed in a single cycle.
 
-The repository is structured as follows:
+No value is lost due to inactivity.
+
+---
+
+## Holder Evaluation Model
+
+At execution time, the system evaluates the holder set.
+
+This evaluation is strictly real-time. The contract does not look backward. It does not maintain rolling averages. It does not record checkpoints. It does not attempt to predict behavior.
+
+Balances are read exactly as they exist in the execution block.
+
+This design eliminates snapshot gaming entirely.
+
+There is no advantage to entering just before execution because execution timing is continuous and permissionless. There is no advantage to exiting immediately after because there is no promised next distribution.
+
+Only sustained holding leads to sustained distribution.
+
+---
+
+## Eligibility Filtering
+
+The reference implementation supports optional eligibility filters:
+
+- Minimum balance thresholds
+- Excluded addresses
+- Contract address filtering
+
+All filters are applied at execution time only.
+
+There is no retroactive eligibility.
+
+---
+
+## Economic Characteristics
+
+Pump Vending Machine is not a yield protocol.
+
+It does not generate returns. It does not create value. It does not compound.
+
+It redistributes existing tokens that have already entered the system.
+
+If inflow is zero, distribution is zero.
+
+If inflow is volatile, distribution is volatile.
+
+This ensures that incentives remain aligned with real system usage rather than speculative expectations.
+
+---
+
+## Game Theory Considerations
+
+The system intentionally discourages short-term extraction strategies.
+
+Because distribution depends on balances at execution and execution timing is not predictable at the second level, there is no reliable strategy for sniping distributions.
+
+The only stable strategy is holding.
+
+This shifts behavior away from PvP extraction and toward passive participation.
+
+---
+
+## Failure Modes
+
+The system is designed to fail safely.
+
+- Missed executions result in accumulation, not loss
+- Partial holder lists result in partial distribution only
+- No execution results in no distribution, not corruption
+
+There is no state that cannot be recovered by simply executing again.
+
+---
+
+## Repository Structure
 
 /contracts
   PumpVendingMachine.sol
-  Distributor.sol
+  HolderRegistry.sol
+  EligibilityFilter.sol
+  Math.sol
 
-/src
-  distributor.js
+/executors
+  executor.js
   scheduler.js
+  watcher.js
+
+/simulations
+  simulate_basic.js
+  simulate_volatility.js
+  simulate_edge_cases.js
 
 /scripts
-  simulate.js
+  deploy.js
+  seed.js
+  run_cycle.js
 
 /docs
   architecture.md
   economics.md
+  security.md
+  execution.md
 
-This separation ensures clarity between on-chain logic, off-chain execution, and documentation.
-
-## On-Chain Contract Design
-
-The PumpVendingMachine contract is responsible for:
-
-- Tracking last distribution timestamp
-- Holding distributable token balance
-- Executing proportional transfers
-- Enforcing time-based execution rules
-
-The contract does not store historical snapshots.
-The contract does not maintain holder lists beyond what is required at execution.
-
-This minimizes storage costs and attack surface.
-
-## Off-Chain Execution
-
-While the system is on-chain deterministic, execution is triggered by an external caller.
-
-Any address may call executeDistribution once the interval has elapsed.
-
-There is no privileged executor.
-
-This design ensures liveness without central control.
-
-Simon Wicki intentionally designed this mechanism to be permissionless while remaining predictable.
-
-## Failure Modes and Safeguards
-
-- If executeDistribution is not called, tokens accumulate
-- When execution resumes, accumulated tokens are distributed in a single batch
-- No rewards are lost
-- No state corruption occurs
-
-Reentrancy protection and balance checks are enforced at every transfer boundary.
-
-## Economic Rationale
-
-PVM aligns incentives by rewarding continuous holders rather than opportunistic participants.
-
-Short-term trading activity funds long-term holders.
-Long-term holders benefit from volume without requiring timing precision.
-
-This reduces PvP dynamics and encourages sustained exposure.
-
-## Relationship to Pump Ecosystem
-
-Pump Vending Machine is intentionally designed to feel native to pump-style environments.
-
-- Simple mechanics
-- Immediate mental model
-- Minimal configuration
-- Strong visual identity
-
-The vending machine metaphor reflects how Simon Wicki thinks about protocol behavior: mechanical, predictable, and indifferent to sentiment.
+---
 
 ## Disclaimer
 
-This repository is provided for educational and experimental purposes.
-It is not audited.
+This code is experimental.
+This code is unaudited.
+This system can lose money.
+
+Simon Wicki provides this repository for transparency and research purposes only.
+
 Use at your own risk.
-
-Simon Wicki assumes no responsibility for loss of funds.
-
